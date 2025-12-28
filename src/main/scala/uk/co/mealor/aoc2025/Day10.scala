@@ -1,9 +1,9 @@
 package uk.co.mealor.aoc2025
 
 import org.scalatest.funsuite.AnyFunSuiteLike
-import os.Path
+import os.{Path, RelPath}
 
-import java.util.concurrent.{Executors, ForkJoinPool}
+import java.util.concurrent.ForkJoinPool
 import scala.annotation.tailrec
 import scala.collection.immutable.BitSet
 import scala.collection.parallel.CollectionConverters.*
@@ -15,7 +15,7 @@ object Day10 {
   def runDay10() = {
 
     //println(part1(scala.io.Source.fromResource("day10.txt").getLines()))
-    println(part2(scala.io.Source.fromResource("day10.txt").getLines()))
+    println(part2(scala.io.Source.fromResource("day10.txt").getLines(), "main"))
 
   }
 
@@ -71,16 +71,17 @@ object Day10 {
   }
 
   @tailrec
-  def solve2Impl(row: Int, target: List[Int], buttons: List[List[Int]], buttonCountHead: Int, buttonCount: List[Int], n: Int): Int = {
+  def solve2Impl(name: String, target: List[Int], buttons: List[List[Int]], buttonCountHead: Int, buttonCount: List[Int], n: Int): Int = {
 
     if n % 10000000 == 0 then {
-      println(s"$row: \t\t\t$target $buttonCountHead ${buttonCount}")
+      println(s"$name: \t\t\t$target $buttonCountHead ${buttonCount}")
+      savePart2Progress(name, target, buttonCountHead, buttonCount)
     }
 
     val buttonIndex = buttonCount.size + 1
 
     if !target.exists(_ > 0) then
-
+      savePart2Progress(name, target, buttonCountHead, buttonCount)
       buttonCount.sum + buttonCountHead
     else if buttonIndex >= buttons.size then {
       val nextButtonsCount = buttonCount.dropWhile(_ == 0)
@@ -88,16 +89,16 @@ object Day10 {
       val prevButton = buttons(nextButtonsCount.size - 1)
       val nextTarget = target.iterator.zip(prevButton).zip(lastButton)
         .map({ case ((a, b), c) => (a, b, c) }).map((t, b1, b2) => t + b1 + b2 * buttonCountHead).toList
-      solve2Impl(row, nextTarget, buttons, nextButtonsCount.head - 1, nextButtonsCount.tail, n + 1)
+      solve2Impl(name, nextTarget, buttons, nextButtonsCount.head - 1, nextButtonsCount.tail, n + 1)
     } else {
       val (nextTarget, lowest) = startingPoint(buttons, target, buttonIndex)
-      solve2Impl(row, nextTarget, buttons, lowest, buttonCountHead :: buttonCount, n + 1)
+      solve2Impl(name, nextTarget, buttons, lowest, buttonCountHead :: buttonCount, n + 1)
     }
   }
 
-  def solve2(row: Int, target: List[Int], buttons: List[BitSet]): Long = {
+  def solve2(name: String, target: List[Int], buttons: List[BitSet]): Long = {
 
-    println(s"$row: \tSTART\t{${target.mkString(",")}}\t${buttons.map(_.mkString(",")).mkString("(", "),(", ")")}")
+    println(s"$name: \tSTART\t{${target.mkString(",")}}\t${buttons.map(_.mkString(",")).mkString("(", "),(", ")")}")
 
     val result = loadPart2(target, buttons) match {
       case Some(r) => r
@@ -109,21 +110,29 @@ object Day10 {
           //.sortBy(button => -buttons.foldLeft(button)((a, b) => a.intersect(b)).size)
           .map(button => target.indices.map(i => if button.contains(i) then 1 else 0).toList)
 
-        val (nextTarget, lowest) = startingPoint(sortedButtons, target, 0)
-
-        val r = solve2Impl(row, nextTarget, sortedButtons, lowest, List(), 0)
+        val r = loadPart2Progress(name) match {
+          case Some((loadedTarget, loadedButtonCountHead, loadedButtonCount)) => {
+            solve2Impl(name, loadedTarget, sortedButtons, loadedButtonCountHead, loadedButtonCount, 0)
+          }
+          case None => {
+            val (nextTarget, lowest) = startingPoint(sortedButtons, target, 0)
+            solve2Impl(name, nextTarget, sortedButtons, lowest, List(), 0)
+          }
+        }
         savePart2(target, buttons, r)
         r
       }
     }
 
-    println(s"$row: \tDONE\t${result}")
+    println(s"$name: \tDONE\t${result}")
 
     result
   }
 
   def part2Cache(target: List[Int], buttons: List[BitSet]): Path = {
-    os.pwd / "cache" / "day10" / s"${buttons.map(_.mkString(",")).mkString("-")}_${target.mkString(",")}"
+    val path = os.pwd / "cache" / "day10" / s"${buttons.map(_.mkString(",")).mkString("-")}_${target.mkString(",")}"
+    os.makeDir.all(path / RelPath.up)
+    path
   }
 
   def loadPart2(target: List[Int], buttons: List[BitSet]): Option[Int] = {
@@ -137,17 +146,42 @@ object Day10 {
   }
 
   def savePart2(target: List[Int], buttons: List[BitSet], result: Int): Unit = {
-    def mkdirs(p: Path): Unit = {
-      if !os.isDir(p) then {
-        mkdirs(p / "..")
-        os.makeDir(p)
-      }
-    }
-
     val file = part2Cache(target, buttons)
-    mkdirs(file / "..")
-    os.write(file, result.toString)
+    if !os.exists(file) then {
+      os.write(file, result.toString)
+      println(s"Wrote ${file}")
+    } else
+      println(s"Skipped writing ${file}: already exists")
 
+  }
+
+  def part2ProgressFile(name: String): Path = {
+    val path = os.pwd / "cache" / "day10-progress" / name
+    os.makeDir.all(path / RelPath.up)
+    path
+  }
+
+  def loadPart2Progress(name: String): Option[(List[Int], Int, List[Int])] = {
+    val file = part2ProgressFile(name)
+    if os.exists(file) then
+      println(s"Loading ${file}")
+      os.read(file).split("/") match {
+        case Array(target, buttonCountHead, buttonCount) =>
+          Some((
+            target.split(",").map(_.toInt).toList,
+            buttonCountHead.toInt,
+            buttonCount.split(",").map(_.toInt).toList
+          ))
+        case _ => None
+      }
+    else
+      println(s"No progress file ${file}")
+      None
+  }
+
+  def savePart2Progress(name: String, target: List[Int], buttonCountHead: Int, buttonCount: List[Int]): Unit = {
+    val file = part2ProgressFile(name)
+    os.write.over(file, s"${target.mkString(",")}/${buttonCountHead}/${buttonCount.mkString(",")}")
     println(s"Wrote ${file}")
   }
 
@@ -187,7 +221,7 @@ object Day10 {
 
   }
 
-  def part2(lines: Iterator[String]): Long = {
+  def part2(lines: Iterator[String], name: String): Long = {
 
     val par = lines.map(parse)
       .zipWithIndex.map((items, i) => {
@@ -198,7 +232,7 @@ object Day10 {
       .par
     par.tasksupport = new ForkJoinTaskSupport(ForkJoinPool(Runtime.getRuntime.availableProcessors()/2))
     par
-      .map((i, buttons, target) => solve2(i, target, buttons))
+      .map((i, buttons, target) => solve2(s"$name $i", target, buttons))
       .sum
   }
 
@@ -224,25 +258,29 @@ class Day10Test extends AnyFunSuiteLike {
     assert(Day10.part2(
       """[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
         |[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
-        |[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}""".stripMargin.linesIterator)
+        |[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}""".stripMargin.linesIterator,
+      "day 10 part 2")
       === 33)
   }
 
   test("day 10 part 2 eg 1") {
     assert(Day10.part2(
-      """[...##] (0,1) (1,2) (2,3) (3,4) {1,2,2,2,1}""".stripMargin.linesIterator)
-      ===4)
+      """[...##] (0,1) (1,2) (2,3) (3,4) {1,2,2,2,1}""".stripMargin.linesIterator,
+      "day 10 part 2 eg 1")
+      === 4)
   }
 
   test("day 10 part 2 eg 2") {
     assert(Day10.part2(
-      """[...##] (0) (0,1) (0,1,2) (0,1,2,3) {1,0,0,0}""".stripMargin.linesIterator)
+      """[...##] (0) (0,1) (0,1,2) (0,1,2,3) {1,0,0,0}""".stripMargin.linesIterator,
+      "day 10 part 2 eg 2")
       === 1)
   }
 
   test("day 10 part 2 eg 3") {
     assert(Day10.part2(
-      """[...##] (0) (0,1) (0,1,2) (0,1,2,3) {2,2,1,1}""".stripMargin.linesIterator)
+      """[...##] (0) (0,1) (0,1,2) (0,1,2,3) {2,2,1,1}""".stripMargin.linesIterator,
+      "day 10 part 2 eg 3")
       === 2)
   }
 }
