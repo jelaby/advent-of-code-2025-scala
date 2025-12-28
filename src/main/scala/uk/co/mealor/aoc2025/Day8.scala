@@ -56,8 +56,48 @@ object Day8 {
     connect(distances.map(_(0))).slice(0, 3).map(_.size).map(_.toLong).product
   }
 
-  def part2(lineIter: Iterator[String]): Long = {
-    0
+  def part2(lines: Iterator[String]): Long = {
+
+    val coords = lines.map(line => line.split(",").map(_.toLong)).toList;
+
+    val distances = coords.zipWithIndex.flatMap((p1, i) => coords.zipWithIndex
+        .filter((p2, j) => i > j)
+        .map((p2, j) => ((i, j), p1.zip(p2).map((a, b) => (b - a) * (b - a)).sum)))
+      .sortBy(_(1))
+
+    def connect(connections: List[(Int, Int)]): (Int,Int) = {
+      @tailrec
+      def connectOne(connections: List[(Int, Int)], boxGroups: Map[Int, Int], groupBoxes: Map[Int, Set[Int]], nextGroup: Int, result: Option[(Int,Int)]): (Int,Int) = {
+        if connections.size % 100 == 0 then println(connections.size)
+
+        if connections.isEmpty then
+          result.get
+        else {
+          val connection = connections.head
+          val group = boxGroups.get(connection(0))
+          val otherGroup = boxGroups.get(connection(1))
+          val (newGroup, nextNextGroup) = group.orElse(otherGroup) match {
+            case Some(g) => (g, nextGroup)
+            case None => (nextGroup, nextGroup + 1)
+          }
+
+          val nextResult = if group != otherGroup then Some(connection) else result
+
+          val groupsToUpdate = group.iterator.concat(otherGroup.iterator).toSet
+          val newBoxGroups = boxGroups.map((b, g) => if groupsToUpdate contains g then (b, newGroup) else (b, g))
+            + (connection(0) -> newGroup) + (connection(1) -> newGroup)
+          val combinedGroup = groupsToUpdate.map(groupBoxes(_)).fold(Set())(_ ++ _) + connection(0) + connection(1)
+          val newGroupBoxes = (groupBoxes -- groupsToUpdate) + (newGroup -> combinedGroup)
+
+          connectOne(connections.tail, newBoxGroups, newGroupBoxes, nextNextGroup, nextResult)
+        }
+      }
+
+      connectOne(connections, Map(), Map(), 1, None)
+    }
+
+    val last = connect(distances.map(_(0)))
+    coords(last(0))(0) * coords(last(1))(0)
   }
 
   def peek[T](x: T): T = {
@@ -118,7 +158,7 @@ class Day8Test extends AnyFunSuiteLike {
         |862,61,35
         |984,92,344
         |425,690,689""".stripMargin.linesIterator)
-      === 40)
+      === 25272)
   }
 
 }
