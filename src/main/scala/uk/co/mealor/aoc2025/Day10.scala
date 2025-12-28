@@ -1,10 +1,13 @@
 package uk.co.mealor.aoc2025
 
 import org.scalatest.funsuite.AnyFunSuiteLike
-import scalaz.Memo
+import os.Path
 
+import java.util.concurrent.{Executors, ForkJoinPool}
 import scala.annotation.tailrec
-import scala.collection.immutable.{BitSet, SortedSet}
+import scala.collection.immutable.BitSet
+import scala.collection.parallel.CollectionConverters.*
+import scala.collection.parallel.ForkJoinTaskSupport
 
 object Day10 {
 
@@ -61,43 +64,80 @@ object Day10 {
   }
 
 
-  def solve2(target: List[Int], buttons: List[BitSet]): Long = {
+  @tailrec
+  def solve2Impl(row: Int, target: List[Int], targetStack: List[List[Int]], buttons: List[List[Int]], buttonIndex: Int, buttonIndexStack: List[Int], n: Int): Int = {
 
-    @tailrec
-    def solve2Impl(target: List[Int], targetStack: List[List[Int]], buttons: List[List[Int]], buttonIndex: Int, buttonIndexStack: List[Int], n: Int): Int = {
+    if n % 10000000 == 0 then {
+      println(s"$row: \t\t\t${buttons.indices.map(i => buttonIndexStack.count(_ == i))}")
+    }
 
-      if (n == 0) then {
-        println(s"$target\t${buttons.map(button => button.count(_ == 1))}")
-      } else if n % 10000000 == 0 then {
-        println(s"$target\t$buttonIndex\t${buttons.indices.map(i => buttonIndexStack.count(_ == i))}")
-      }
+    if buttonIndex >= buttons.size then {
+      solve2Impl(row, targetStack.head, targetStack.tail, buttons, buttonIndexStack.head + 1, buttonIndexStack.tail, n + 1)
+    } else if !target.exists(_ > 0) then
 
-      if buttonIndex >= buttons.size then {
-        solve2Impl(targetStack.head, targetStack.tail, buttons, buttonIndexStack.head + 1, buttonIndexStack.tail, n + 1)
-      } else if !target.exists(_ > 0) then
+      targetStack.size
 
-        targetStack.size
+    else {
+      val button = buttons(buttonIndex)
+      val nextTarget = target.iterator.zip(button).map((t, b) => t - b).toList
 
-      else {
-        val button = buttons(buttonIndex)
-        val nextTarget = target.iterator.zip(button).map((t, b) => t - b).toList
+      if nextTarget.exists(_ < 0) then
+        solve2Impl(row, target, targetStack, buttons, buttonIndex + 1, buttonIndexStack, n + 1)
+      else
+        solve2Impl(row, nextTarget, target :: targetStack, buttons, buttonIndex, buttonIndex :: buttonIndexStack, n + 1)
+    }
+  }
 
-        if nextTarget.exists(_ < 0) then
-          solve2Impl(target, targetStack, buttons, buttonIndex + 1, buttonIndexStack, n + 1)
-        else
-          solve2Impl(nextTarget, target :: targetStack, buttons, buttonIndex, buttonIndex :: buttonIndexStack, n + 1)
+  def solve2(row: Int, target: List[Int], buttons: List[BitSet]): Long = {
+
+    println(s"$row: \tSTART\t{${target.mkString(",")}}\t${buttons.map(_.mkString(",")).mkString("(", "),(", ")")}")
+
+    val result = loadPart2(target, buttons) match {
+      case Some(r) => r
+      case _ => {
+
+        val r = solve2Impl(row, target,
+          List(),
+          buttons
+            .sortBy(-_.size)
+            .sortBy(button => -buttons.foldLeft(button)((a, b) => a.intersect(b)).size)
+            .map(button => target.indices.map(i => if button.contains(i) then 1 else 0).toList),
+          0,
+          List(),
+          0)
+        savePart2(target, buttons, r)
+        r
       }
     }
 
-    solve2Impl(target,
-      List(),
-      buttons
-        .sortBy(-_.size)
-        .sortBy(button => -buttons.foldLeft(button)((a,b) => a.intersect(b)).size)
-        .map(button => target.indices.map(i => if button.contains(i) then 1 else 0).toList),
-      0,
-      List(),
-      0)
+    println(s"$row: \tDONE\t${result}")
+
+    result
+  }
+
+  def part2Cache(target: List[Int], buttons: List[BitSet]): Path = {
+    os.pwd / "cache" / "day10" / s"${buttons.map(_.mkString(",")).mkString("-")}_${target.mkString(",")}"
+  }
+
+  def loadPart2(target: List[Int], buttons: List[BitSet]): Option[Int] = {
+    val file = part2Cache(target, buttons)
+    if os.exists(file) then
+      Some(os.read(file)).flatMap(_.toIntOption)
+    else
+      None
+  }
+
+  def savePart2(target: List[Int], buttons: List[BitSet], result: Int): Unit = {
+    def mkdirs(p: Path): Unit = {
+      if !os.isDir(p) then {
+        mkdirs(p / "..")
+        os.makeDir(p)
+      }
+    }
+
+    val file = part2Cache(target, buttons)
+    mkdirs(file / "..")
+    os.write(file, result.toString)
   }
 
   /*
@@ -137,10 +177,16 @@ object Day10 {
   }
 
   def part2(lines: Iterator[String]): Long = {
-    lines.map(parse)
-      .zipWithIndex.map((l, i) => peek((i, l))).map((i, l) => l)
-      .map((_, buttons, target) => solve2(target, buttons))
-      .map(peek)
+
+    val par = lines.map(parse)
+      .zipWithIndex.map((items, i) => {
+        val (_, buttons, target) = items;
+        (i, buttons, target)
+      })
+      .toList.par;
+    par.tasksupport = new ForkJoinTaskSupport()
+      par
+      .map((i, buttons, target) => solve2(i, target, buttons))
       .sum
   }
 
