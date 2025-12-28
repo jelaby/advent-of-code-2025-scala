@@ -63,37 +63,109 @@ object Day10 {
     }
   }
 
-  def startingPoint(buttons: List[List[Int]], target: List[Int], buttonIndex: Int): (List[Int], Int) = {
+  def startingPoint(buttons: List[List[Int]], target: List[Int], buttonIndex: Int): (MutatingList, Int) = {
+    startingPoint(buttons, MutatingList(target, target.length), buttonIndex)
+  }
+
+  def startingPoint(buttons: List[List[Int]], target: MutatingList, buttonIndex: Int): (MutatingList, Int) = {
     val button = buttons(buttonIndex)
     val lowest = button.zipWithIndex.filter((b, i) => b > 0).map((b, i) => target(i)).min
-    val nextTarget = target.iterator.zip(button).map((t, b) => t - (b * lowest)).toList
-    (nextTarget, lowest)
+
+    target + button.map(-_ * lowest)
+
+    (target, lowest)
+  }
+
+  class MutatingList(val content: Array[Int], var offset: Int) extends IterableOnce[Int] {
+
+    def this(maxSize: Int) = {
+      this(new Array[Int](maxSize), maxSize)
+    }
+
+    def this(other: List[Int], maxSize: Int) = {
+      this(maxSize)
+      other.reverseIterator.foreach(_ :: this)
+    }
+
+    def apply(index: Int): Int = {
+      content(offset + index)
+    }
+
+    def +(other: IterableOnce[Int]): MutatingList = {
+      other.iterator.zipWithIndex.foreach((o, i) => content(offset + i) += o)
+      this
+    }
+
+    def ::(other: Int): MutatingList = {
+      offset -= 1
+      content(offset) = other
+      this
+    }
+
+    private def actualIndices: Range = (offset until content.length)
+
+    def exists(test: Int => Boolean): Boolean = {
+      actualIndices.exists(i => test(content(i)))
+    }
+
+    def size: Int = content.length - offset
+
+    def sum: Int = actualIndices.map(i => content(i)).sum
+
+    def dropWhile(test: Int => Boolean): MutatingList = {
+      while (offset < content.length && test(content(offset)))
+        offset += 1
+      this
+    }
+
+    def head: Int = content(offset)
+
+    def tail: MutatingList = {
+      offset += 1
+      this
+    }
+
+    override def toString(): String = {
+      actualIndices.map(content(_)).mkString("MutatingList(", ",", s"; $offset/${content.length})")
+    }
+
+    def toList: List[Int] = {
+      List.from(this)
+    }
+
+    override def iterator: Iterator[Int] = actualIndices.iterator.map(content(_))
   }
 
   @tailrec
-  def solve2Impl(name: String, target: List[Int], buttons: List[List[Int]], buttonCountHead: Int, buttonCount: List[Int], n: Long, startTime: Long): Int = {
+  def solve2Impl(name: String, target: MutatingList, buttons: List[List[Int]], buttonCount: MutatingList, n: Long, startTime: Long): Int = {
 
     if n % 10000000 == 0 then {
       val now = System.currentTimeMillis()
       println(s"$name: \t\t\t$target ${buttonCount} ${n} in ${now - startTime}ms (${if n == 0 then 0 else ((now - startTime) * 1000000) / n} ps/unit)")
-      savePart2Progress(name, target, buttonCountHead, buttonCount)
+      savePart2Progress(name, target, buttonCount)
     }
 
-    val buttonIndex = buttonCount.size + 1
+    val buttonIndex = buttonCount.size
 
-    if !target.exists(_ > 0) then
-      savePart2Progress(name, target, buttonCountHead, buttonCount)
-      buttonCount.sum + buttonCountHead
-    else if buttonIndex >= buttons.size then {
-      val nextButtonsCount = buttonCount.dropWhile(_ == 0)
+    if !target.exists(_ > 0) then {
+      savePart2Progress(name, target, buttonCount)
+      buttonCount.sum
+    } else if buttonIndex >= buttons.size then {
+      val buttonsCountHead = buttonCount.head
+
+      buttonCount.tail.dropWhile(_ == 0)
+
+      val nextButtonsCountHead = buttonCount.head
+
+
       val lastButton = buttons(buttonIndex - 1)
-      val prevButton = buttons(nextButtonsCount.size - 1)
-      val nextTarget = target.iterator.zip(prevButton).zip(lastButton)
-        .map({ case ((a, b), c) => (a, b, c) }).map((t, b1, b2) => t + b1 + b2 * buttonCountHead).toList
-      solve2Impl(name, nextTarget, buttons, nextButtonsCount.head - 1, nextButtonsCount.tail, n + 1, startTime)
+      val prevButton = buttons(buttonCount.size - 1)
+      target + lastButton.iterator.map(_ * buttonsCountHead).zip(prevButton).map(_ + _)
+      (nextButtonsCountHead - 1) :: (buttonCount.tail)
+      solve2Impl(name, target, buttons, buttonCount, n + 1, startTime)
     } else {
       val (nextTarget, lowest) = startingPoint(buttons, target, buttonIndex)
-      solve2Impl(name, nextTarget, buttons, lowest, buttonCountHead :: buttonCount, n + 1, startTime)
+      solve2Impl(name, nextTarget, buttons, lowest :: buttonCount, n + 1, startTime)
     }
   }
 
@@ -113,11 +185,11 @@ object Day10 {
 
         val r = loadPart2Progress(name) match {
           case Some((loadedTarget, loadedButtonCountHead, loadedButtonCount)) => {
-            solve2Impl(name, loadedTarget, sortedButtons, loadedButtonCountHead, loadedButtonCount, 0, System.currentTimeMillis())
+            solve2Impl(name, MutatingList(loadedTarget, loadedTarget.length), sortedButtons, MutatingList(loadedButtonCountHead :: loadedButtonCount, buttons.length), 0, System.currentTimeMillis())
           }
           case None => {
             val (nextTarget, lowest) = startingPoint(sortedButtons, target, 0)
-            solve2Impl(name, nextTarget, sortedButtons, lowest, List(), 0, System.currentTimeMillis())
+            solve2Impl(name, nextTarget, sortedButtons, MutatingList(List(lowest), buttons.length), 0, System.currentTimeMillis())
           }
         }
         savePart2(target, buttons, r)
@@ -178,6 +250,10 @@ object Day10 {
     else
       println(s"No progress file ${file}")
       None
+  }
+
+  def savePart2Progress(name: String, target: MutatingList, buttonCount: MutatingList): Unit = {
+    savePart2Progress(name, target.toList, buttonCount.head, buttonCount.toList.tail)
   }
 
   def savePart2Progress(name: String, target: List[Int], buttonCountHead: Int, buttonCount: List[Int]): Unit = {
@@ -283,5 +359,43 @@ class Day10Test extends AnyFunSuiteLike {
       """[...##] (0) (0,1) (0,1,2) (0,1,2,3) {2,2,1,1}""".stripMargin.linesIterator,
       "day 10 part 2 eg 3")
       === 2)
+  }
+
+  test("MutatingList apply") {
+    val l = Day10.MutatingList(List(11, 22, 33), 10)
+
+    assert(l(0) === 11)
+    assert(l(1) === 22)
+    assert(l(2) === 33)
+  }
+
+  test("MutatingList prepend") {
+    val l = Day10.MutatingList(List(11, 22, 33), 10)
+    val l2 = 99 :: l
+
+    assert(l === l2)
+
+    assert(l(0) === 99)
+    assert(l(1) === 11)
+    assert(l(2) === 22)
+    assert(l(3) === 33)
+  }
+
+  test("MutatingList tail") {
+    val l = Day10.MutatingList(List(11, 22, 33), 10)
+    val l2 = l.tail
+    assert(l === l2)
+    assert(l(0) === 22)
+    assert(l(1) === 33)
+  }
+
+  test("MutatingList +") {
+    val l = Day10.MutatingList(List(11, 22, 33), 10)
+    val other = List(3, 5, 7);
+    val l2 = (l + other)
+    assert(l === l2)
+    assert(l(0) === 14)
+    assert(l(1) === 27)
+    assert(l(2) === 40)
   }
 }
