@@ -71,10 +71,11 @@ object Day10 {
   }
 
   @tailrec
-  def solve2Impl(name: String, target: List[Int], buttons: List[List[Int]], buttonCountHead: Int, buttonCount: List[Int], n: Int): Int = {
+  def solve2Impl(name: String, target: List[Int], buttons: List[List[Int]], buttonCountHead: Int, buttonCount: List[Int], n: Long, startTime: Long): Int = {
 
     if n % 10000000 == 0 then {
-      println(s"$name: \t\t\t$target $buttonCountHead ${buttonCount}")
+      val now = System.currentTimeMillis()
+      println(s"$name: \t\t\t$target ${buttonCount} ${n} in ${now - startTime}ms (${if n == 0 then 0 else ((now - startTime) * 1000000) / n} ps/unit)")
       savePart2Progress(name, target, buttonCountHead, buttonCount)
     }
 
@@ -89,10 +90,10 @@ object Day10 {
       val prevButton = buttons(nextButtonsCount.size - 1)
       val nextTarget = target.iterator.zip(prevButton).zip(lastButton)
         .map({ case ((a, b), c) => (a, b, c) }).map((t, b1, b2) => t + b1 + b2 * buttonCountHead).toList
-      solve2Impl(name, nextTarget, buttons, nextButtonsCount.head - 1, nextButtonsCount.tail, n + 1)
+      solve2Impl(name, nextTarget, buttons, nextButtonsCount.head - 1, nextButtonsCount.tail, n + 1, startTime)
     } else {
       val (nextTarget, lowest) = startingPoint(buttons, target, buttonIndex)
-      solve2Impl(name, nextTarget, buttons, lowest, buttonCountHead :: buttonCount, n + 1)
+      solve2Impl(name, nextTarget, buttons, lowest, buttonCountHead :: buttonCount, n + 1, startTime)
     }
   }
 
@@ -112,11 +113,11 @@ object Day10 {
 
         val r = loadPart2Progress(name) match {
           case Some((loadedTarget, loadedButtonCountHead, loadedButtonCount)) => {
-            solve2Impl(name, loadedTarget, sortedButtons, loadedButtonCountHead, loadedButtonCount, 0)
+            solve2Impl(name, loadedTarget, sortedButtons, loadedButtonCountHead, loadedButtonCount, 0, System.currentTimeMillis())
           }
           case None => {
             val (nextTarget, lowest) = startingPoint(sortedButtons, target, 0)
-            solve2Impl(name, nextTarget, sortedButtons, lowest, List(), 0)
+            solve2Impl(name, nextTarget, sortedButtons, lowest, List(), 0, System.currentTimeMillis())
           }
         }
         savePart2(target, buttons, r)
