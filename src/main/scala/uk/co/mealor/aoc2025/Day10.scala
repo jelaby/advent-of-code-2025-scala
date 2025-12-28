@@ -83,16 +83,12 @@ object Day10 {
 
       buttonCount.sum + buttonCountHead
     else if buttonIndex >= buttons.size then {
-      if buttonCountHead == 0 then {
-        val nextButtonsCount = buttonCount.dropWhile(_ == 0)
-        val prevButton = buttons(nextButtonsCount.size - 1)
-        val nextTarget = target.iterator.zip(prevButton).map((t, b) => t + b).toList
-        solve2Impl(row, nextTarget, buttons, nextButtonsCount.head - 1, nextButtonsCount.tail, n + 1)
-      } else {
-        val prevButton = buttons(buttonIndex - 1)
-        val nextTarget = target.iterator.zip(prevButton).map((t, b) => t + b).toList
-        solve2Impl(row, nextTarget, buttons, buttonCountHead - 1, buttonCount, n + 1)
-      }
+      val nextButtonsCount = buttonCount.dropWhile(_ == 0)
+      val lastButton = buttons(buttonIndex - 1)
+      val prevButton = buttons(nextButtonsCount.size - 1)
+      val nextTarget = target.iterator.zip(prevButton).zip(lastButton)
+        .map({ case ((a, b), c) => (a, b, c) }).map((t, b1, b2) => t + b1 + b2 * buttonCountHead).toList
+      solve2Impl(row, nextTarget, buttons, nextButtonsCount.head - 1, nextButtonsCount.tail, n + 1)
     } else {
       val (nextTarget, lowest) = startingPoint(buttons, target, buttonIndex)
       solve2Impl(row, nextTarget, buttons, lowest, buttonCountHead :: buttonCount, n + 1)
@@ -133,8 +129,10 @@ object Day10 {
   def loadPart2(target: List[Int], buttons: List[BitSet]): Option[Int] = {
     val file = part2Cache(target, buttons)
     if os.exists(file) then
+      println(s"Loading ${file}")
       Some(os.read(file)).flatMap(_.toIntOption)
     else
+      println(s"No cache file ${file}")
       None
   }
 
@@ -149,6 +147,8 @@ object Day10 {
     val file = part2Cache(target, buttons)
     mkdirs(file / "..")
     os.write(file, result.toString)
+
+    println(s"Wrote ${file}")
   }
 
   /*
@@ -226,5 +226,23 @@ class Day10Test extends AnyFunSuiteLike {
         |[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
         |[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}""".stripMargin.linesIterator)
       === 33)
+  }
+
+  test("day 10 part 2 eg 1") {
+    assert(Day10.part2(
+      """[...##] (0,1) (1,2) (2,3) (3,4) {1,2,2,2,1}""".stripMargin.linesIterator)
+      ===4)
+  }
+
+  test("day 10 part 2 eg 2") {
+    assert(Day10.part2(
+      """[...##] (0) (0,1) (0,1,2) (0,1,2,3) {1,0,0,0}""".stripMargin.linesIterator)
+      === 1)
+  }
+
+  test("day 10 part 2 eg 3") {
+    assert(Day10.part2(
+      """[...##] (0) (0,1) (0,1,2) (0,1,2,3) {2,2,1,1}""".stripMargin.linesIterator)
+      === 2)
   }
 }
