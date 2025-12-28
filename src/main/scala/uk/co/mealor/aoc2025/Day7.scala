@@ -1,6 +1,7 @@
 package uk.co.mealor.aoc2025
 
 import org.scalatest.funsuite.AnyFunSuiteLike
+import scalaz.Memo
 
 import scala.annotation.tailrec
 import scala.collection.immutable
@@ -59,6 +60,20 @@ object Day7 {
     }
   }
 
+  val quantumPropagate: ((Int, List[String])) => Long = Memo.mutableHashMapMemo((beam: Int, lines: List[String]) => {
+    if lines.isEmpty then
+      1
+    else {
+
+      val splitters = findSplitters(lines.head)
+
+      if splitters.contains(beam) then
+        quantumPropagate(beam - 1, lines.tail) + quantumPropagate(beam + 1, lines.tail)
+      else
+        quantumPropagate(beam, lines.tail)
+    }
+  })
+
   def part1(lines: Iterator[String]): Long = {
 
     val beams = initialBeam(lines.next())
@@ -67,7 +82,9 @@ object Day7 {
   }
 
   def part2(lineIter: Iterator[String]): Long = {
-    0
+    val lines = lineIter.toList
+    val beams = initialBeam(lines.head)
+    quantumPropagate((beams.head, lines))
   }
 
   def peek[T](x: T): T = {
@@ -168,7 +185,46 @@ class Day7Test extends AnyFunSuiteLike {
         |...............
         |.^.^.^.^.^...^.
         |...............""".stripMargin.linesIterator)
-      === 3263827)
+      === 40)
+  }
+
+  test("day 7 part 2 a") {
+    assert(Day7.part2(
+      """.......S.......
+        |...............""".stripMargin.linesIterator)
+      === 1)
+  }
+
+  test("day 7 part 2 b") {
+    assert(Day7.part2(
+      """.......S.......
+        |...............
+        |.......^.......""".stripMargin.linesIterator)
+      === 2)
+  }
+
+  test("day 7 part 2 c") {
+    assert(Day7.part2(
+      """.......S.......
+        |.......^.......
+        |......^.^......""".stripMargin.linesIterator)
+      === 4)
+  }
+
+  test("day 7 part 2 d") {
+    assert(Day7.part2(
+      """.......S.......
+        |.......^.......
+        |......^........""".stripMargin.linesIterator)
+      === 3)
+  }
+
+  test("day 7 part 2 e") {
+    assert(Day7.part2(
+      """.......S.......
+        |.......^.......
+        |...............""".stripMargin.linesIterator)
+      === 2)
   }
 
 }
