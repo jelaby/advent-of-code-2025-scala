@@ -31,39 +31,41 @@ object Day11 {
   }
 
   def part1(lines: Iterator[String]): Long = {
+    solve(parse(lines), "you", "out")
+  }
 
-    val map = parse(lines)
+  def solve(map: Map[String, Set[String]], start: String, end: String): Long = {
+    solve(List(start), Map(end -> 1), map, start)
+  }
 
-    @tailrec
-    def solve(workList: List[String], cache: Map[String, Long], map: Map[String, Set[String]]):Long = {
-      println(s"${workList}\t${cache}")
+  @tailrec
+  def solve(workList: List[String], cache: Map[String, Long], map: Map[String, Set[String]], start: String): Long = {
 
-      if workList.isEmpty then
-        cache("you")
-      else /*cache.get(workList.head) match {
-        case Some(_) => solve(workList.tail, cache, map)
-        case None =>*/ {
+    if workList.isEmpty then
+      cache(start)
+    else {
 
-          val outputs = map(workList.head)
-          val notCalculated = outputs.filter(!cache.contains(_))
+      val outputs = map.getOrElse(workList.head, List())
+      val notCalculated = outputs.filter(!cache.contains(_))
 
-          if notCalculated.isEmpty then {
-            val result = outputs.iterator.map(cache(_)).sum
-            solve(workList.tail, cache + (workList.head -> result), map)
-          } else {
-            solve(notCalculated.toList ::: workList, cache, map)
-          }
-        }
-      /*}*/
-
+      if notCalculated.isEmpty then {
+        val result = outputs.iterator.map(cache(_)).sum
+        solve(workList.tail, cache + (workList.head -> result), map, start)
+      } else {
+        solve(notCalculated.toList ::: workList, cache, map, start)
+      }
     }
-
-    solve(List("you"), Map("out" -> 1), map)
 
   }
 
   def part2(lines: Iterator[String]): Long = {
-0
+
+    val map = parse(lines)
+
+    (solve(map, "svr", "dac") * solve(map, "dac", "fft") * solve(map, "fft", "out"))
+    + (solve(map, "svr", "fft") * solve(map, "fft", "dac") * solve(map, "dac", "out"))
+
+
   }
 
   def peek[T](x: T): T = {
@@ -93,16 +95,19 @@ class Day11Test extends AnyFunSuiteLike {
 
   test("day 11 part 2") {
     assert(Day11.part2(
-      """aaa: you hhh
-        |you: bbb ccc
-        |bbb: ddd eee
-        |ccc: ddd eee fff
-        |ddd: ggg
-        |eee: out
-        |fff: out
+      """svr: aaa bbb
+        |aaa: fft
+        |fft: ccc
+        |bbb: tty
+        |tty: ccc
+        |ccc: ddd eee
+        |ddd: hub
+        |hub: fff
+        |eee: dac
+        |dac: fff
+        |fff: ggg hhh
         |ggg: out
-        |hhh: ccc fff iii
-        |iii: out""".stripMargin.linesIterator)
-      === 33)
+        |hhh: out""".stripMargin.linesIterator)
+      === 2)
   }
 }
