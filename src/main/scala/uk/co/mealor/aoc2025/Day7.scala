@@ -4,7 +4,6 @@ import org.scalatest.funsuite.AnyFunSuiteLike
 import scalaz.Memo
 
 import scala.annotation.tailrec
-import scala.collection.immutable
 
 object Day7 {
 
