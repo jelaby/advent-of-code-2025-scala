@@ -65,26 +65,36 @@ object Day10 {
 
 
   @tailrec
-  def solve2Impl(row: Int, target: List[Int], targetStack: List[List[Int]], buttons: List[List[Int]], buttonIndex: Int, buttonIndexStack: List[Int], n: Int): Int = {
+  def solve2Impl(row: Int, target: List[Int], buttons: List[List[Int]], buttonCountHead: Int, buttonCount: List[Int], n: Int): Int = {
 
     if n % 10000000 == 0 then {
-      println(s"$row: \t\t\t${buttons.indices.map(i => buttonIndexStack.count(_ == i))}")
+      println(s"$row: \t\t\t$target $buttonCountHead ${buttonCount}")
     }
 
-    if buttonIndex >= buttons.size then {
-      solve2Impl(row, targetStack.head, targetStack.tail, buttons, buttonIndexStack.head + 1, buttonIndexStack.tail, n + 1)
-    } else if !target.exists(_ > 0) then
+    val buttonIndex = buttonCount.size
 
-      targetStack.size
+    if !target.exists(_ > 0) then
 
-    else {
+      buttonCount.sum + (buttonCountHead max 0)
+    else if buttonIndex >= buttons.size then {
+      val nextButtonsCount = buttonCount.dropWhile(_ == 0)
+      val prevButton = buttons(nextButtonsCount.size - 1)
+      val nextTarget = target.iterator.zip(prevButton).map((t, b) => t + b).toList
+      solve2Impl(row, nextTarget, buttons, -1, (nextButtonsCount.head - 1) :: nextButtonsCount.tail, n + 1)
+    } else if buttonCountHead < 0 then {
+      val button = buttons(buttonIndex)
+      val lowest = button.zipWithIndex.filter((b, i) => b > 0).map((b, i) => target(i)).min
+      val nextTarget = target.iterator.zip(button).map((t, b) => t - (b * lowest)).toList
+      solve2Impl(row, nextTarget, buttons, -1, lowest :: buttonCount, n + 1)
+
+    } else {
       val button = buttons(buttonIndex)
       val nextTarget = target.iterator.zip(button).map((t, b) => t - b).toList
 
       if nextTarget.exists(_ < 0) then
-        solve2Impl(row, target, targetStack, buttons, buttonIndex + 1, buttonIndexStack, n + 1)
+        solve2Impl(row, target, buttons, 0, buttonCountHead :: buttonCount, n + 1)
       else
-        solve2Impl(row, nextTarget, target :: targetStack, buttons, buttonIndex, buttonIndex :: buttonIndexStack, n + 1)
+        solve2Impl(row, nextTarget, buttons, buttonCountHead + 1, buttonCount, n + 1)
     }
   }
 
@@ -96,15 +106,11 @@ object Day10 {
       case Some(r) => r
       case _ => {
 
-        val r = solve2Impl(row, target,
-          List(),
-          buttons
-            .sortBy(-_.size)
-            .sortBy(button => -buttons.foldLeft(button)((a, b) => a.intersect(b)).size)
-            .map(button => target.indices.map(i => if button.contains(i) then 1 else 0).toList),
-          0,
-          List(),
-          0)
+        val r = solve2Impl(row, target, buttons
+          .sortBy(button => (button.size * buttons.size) - buttons.map(other => button.intersect(other).size).sum)
+          .sortBy(-_.size)
+          //.sortBy(button => -buttons.foldLeft(button)((a, b) => a.intersect(b)).size)
+          .map(button => target.indices.map(i => if button.contains(i) then 1 else 0).toList), -1, List(), 0)
         savePart2(target, buttons, r)
         r
       }
@@ -183,9 +189,10 @@ object Day10 {
         val (_, buttons, target) = items;
         (i, buttons, target)
       })
-      .toList.par;
-    par.tasksupport = new ForkJoinTaskSupport()
-      par
+      .toList
+      .par
+    par.tasksupport = new ForkJoinTaskSupport(ForkJoinPool(Runtime.getRuntime.availableProcessors()/2))
+    par
       .map((i, buttons, target) => solve2(i, target, buttons))
       .sum
   }
