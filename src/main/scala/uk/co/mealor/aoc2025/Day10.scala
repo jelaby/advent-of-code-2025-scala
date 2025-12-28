@@ -230,7 +230,7 @@ object Day10 {
       })
       .toList
       .par
-    par.tasksupport = new ForkJoinTaskSupport(ForkJoinPool(Runtime.getRuntime.availableProcessors()/2))
+    par.tasksupport = new ForkJoinTaskSupport(ForkJoinPool(Runtime.getRuntime.availableProcessors()))
     par
       .map((i, buttons, target) => solve2(s"$name $i", target, buttons))
       .sum
