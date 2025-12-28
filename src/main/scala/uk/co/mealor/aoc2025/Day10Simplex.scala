@@ -63,21 +63,40 @@ object Day10Simplex {
     }
   }
 
-  class Tableau(tableau: List[List[Double]]) {
+  object Tableau {
 
-    def this(c: List[Double], b: List[Double], a: List[List[Double]]) = {
-      this((0 until 1 + b.size).map(row =>
+    def toMinimiseSlack(c: List[Int], b: List[Double], a: List[List[Double]]) = {
+      new Tableau((0 until 1 + b.size).map(row =>
         (0 until 1 + c.size + b.size + 1).map[Double]({
           // z column
           case col if (col == 0) => if row == 0 then 1 else 0
-          case col if (col > 0 && col <= c.size) => if row == 0 then 
-            - c(col - 1)
+          case col if (col > 0 && col <= c.size) => if row == 0 then
+            0
           else
             a(row - 1)(col - 1)
-          case col if (col > c.size && col <= c.size + b.size) => if col - c.size == row then 1 else 0
+          case col if (col > c.size && col <= c.size + b.size) => if col - c.size == row then 1 else if row == 0 then 1000 else 0
           case col => if row == 0 then 0 else b(row - 1)
         }).toList).toList)
     }
+
+    def withSlack(c: List[Double], b: List[Double], a: List[List[Double]], slackCost: Double = 0) = {
+      new Tableau((0 until 1 + b.size).map(row =>
+        (0 until 1 + c.size + b.size + 1).map[Double]({
+          // z column
+          case col if (col == 0) => if row == 0 then 1 else 0
+          case col if (col > 0 && col <= c.size) => if row == 0 then
+            - c(col - 1)
+          else
+            a(row - 1)(col - 1)
+          case col if (col > c.size && col <= c.size + b.size) => if col - c.size == row then 1 else if row == 0 then slackCost else 0
+          case col => if row == 0 then 0 else b(row - 1)
+        }).toList).toList)
+    }
+
+
+  }
+
+  class Tableau(tableau: List[List[Double]]) {
 
     def at(col: Int, row: Int): Double = tableau(row)(col)
 
@@ -87,7 +106,7 @@ object Day10Simplex {
     def rowAt(row: Int): List[Double] = tableau(row)
 
     override def toString: String = {
-      tableau.map(_.map(n => if n == 0 then "" else n.toString).mkString("[", "\t", "]")).mkString("\n")
+      tableau.map(_.map(n => if n == 0 then "         " else f"$n%9.4f").mkString("[", "\t", "]")).mkString("\n")
     }
 
     def toArray: List[List[Double]] = {
@@ -279,7 +298,7 @@ class Day10SimpleTest extends AnyFunSuiteLike {
   }
 
   test("tableau constructor") {
-    assert(new Day10Simplex.Tableau(
+    assert(Day10Simplex.Tableau.withSlack(
       List(1, 1, 1, 1, 1, 1),
       List(3, 5, 4, 7), Day10Simplex.flip(
         List(
@@ -298,7 +317,7 @@ class Day10SimpleTest extends AnyFunSuiteLike {
   }
 
   test("tableau withoutSlack") {
-    assert(new Day10Simplex.Tableau(
+    assert(Day10Simplex.Tableau.withSlack(
       List(1, 1, 1, 1, 1, 1),
       List(3, 5, 4, 7), Day10Simplex.flip(
         List(
@@ -317,7 +336,7 @@ class Day10SimpleTest extends AnyFunSuiteLike {
   }
 
   test("tableau maximise to remove slack") {
-    val tableau = new Day10Simplex.Tableau(
+    val tableau = Day10Simplex.Tableau.withSlack(
       List(1, 1, 1, 1, 1, 1),
       List(3, 5, 4, 7), Day10Simplex.flip(
         List(
@@ -332,8 +351,24 @@ class Day10SimpleTest extends AnyFunSuiteLike {
     )
   }
 
+  test("tableau to minimize slack") {
+    val tableau = Day10Simplex.Tableau.withSlack(
+      List(1, 1, 1, 1, 1, 1),
+      List(3, 5, 4, 7), Day10Simplex.flip(
+        List(
+          List(0, 0, 0, 1),
+          List(0, 1, 0, 1),
+          List(0, 0, 1, 0),
+          List(0, 0, 1, 1),
+          List(1, 0, 0, 1),
+          List(1, 1, 0, 0))), -1.0 / 1024)
+    assert(tableau.maximise.at(11,0) ===
+      0
+    )
+  }
+
   test("tableau minimize with slack") {
-    val tableau = new Day10Simplex.Tableau(
+    val tableau = Day10Simplex.Tableau.withSlack(
       List(1, 1, 1, 1, 1, 1),
       List(3, 5, 4, 7), Day10Simplex.flip(
         List(
@@ -357,7 +392,7 @@ class Day10SimpleTest extends AnyFunSuiteLike {
       List(1, 0, 0, 1),
       List(1, 1, 0, 0))
     val targetValues = List[Double](3, 5, 4, 7)
-    val minimum = new Day10Simplex.Tableau(
+    val minimum = Day10Simplex.Tableau.withSlack(
       List(1, 1, 1, 1, 1, 1),
       targetValues, Day10Simplex.flip(
         buttonDefinitions)).maximise.withoutSlack.minimise
